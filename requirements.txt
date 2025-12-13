@@ -1,0 +1,8 @@
+langchain_ollama
+langchain
+langchain_core
+python-dotenv
+json
+os
+google-generativeai
+
