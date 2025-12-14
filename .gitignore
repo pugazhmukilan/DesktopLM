@@ -1,3 +1,4 @@
 .env
 llmvenv/
 __pycache__/
+website/

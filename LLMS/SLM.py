@@ -48,8 +48,19 @@ class SLM:
 
 
 class googleSLM():
+    _instance = None
+
+    def  __new__(self,*args,**kwargs):
+        if not self._instance:
+            self._instance = super(googleSLM,self).__new__(self)
+        return self._instance
+    
     def __init__(self,systemprompt):
-        self.system_prompt = systemprompt
+        if hasattr(self,"is_initilized"):
+            return
+        self.system_prompt  =SYSTEM_PROMPT
+
+        is_initialized = True
     def generate(self,user_input):
 
 
