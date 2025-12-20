@@ -2,3 +2,5 @@
 llmvenv/
 __pycache__/
 website/
+MemoryManager/Database/data/
+.db
