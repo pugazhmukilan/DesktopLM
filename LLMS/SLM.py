@@ -1,7 +1,7 @@
 import ollama
 from langchain_core.prompts import PromptTemplate
 import json
-from sys_prompt_slm import SYSTEM_PROMPT
+from LLMS.sys_prompt_slm import SYSTEM_PROMPT
 import sys
 import os
 import json

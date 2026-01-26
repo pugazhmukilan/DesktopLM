@@ -16,15 +16,8 @@ class VectorMemoryStore():
         self.collection= None
         self._initialized = True
 
-    def initialize(self):
-        # os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
-
-        # if os.path.exists(self.index_path):
-        #     with open(self.index_path, "rb") as f:
-        #         self.index = pickle.load(f)
-        # else:
-        #     self.index = {}
-
+    def initilize(self):
+        
 
         self.client = chromadb.PersistentClient(path = self.index_path)
         self.collection = self.client.get_or_create_collection(name = self.collection_name)
@@ -40,25 +33,27 @@ class VectorMemoryStore():
         if "memory_id" not in data:
             data["memory_id"] = str(uuid.uuid4())
 
-
-
-        
         ## TODO: Add the data in the SQL or NOSQL then get the id and use it here
 
+        # Use 'interpreted_meaning' as text if 'text' is missing
+        text_content = data.get("interpreted_meaning", data.get("text", ""))
         print("the text which is stored in the vectorDB")
-        print(data["text"])
+        print(text_content)
 
         metad = data.copy()
         metad.pop("text",None)
+        metad.pop("interpreted_meaning", None) # Remove content from metadata
         metad.pop("memory_id",None)
+        
+        # Ensure metadata values are strings (Chroma requirement)
         for key,value in metad.items():
-            print(key, value)
+            # print(key, value)
             metad[key] = str(value)
 
 
         self.collection.add(
             ids = data["memory_id"],
-            documents = data["text"],
+            documents = text_content,
             metadatas = metad
         )
 
@@ -83,7 +78,7 @@ if __name__ == "__main__":
     print("starting the vectorDB")
 
     database = VectorMemoryStore()
-    database.initialize()
+    database.initilize()
 
     fake_json_data = {
         "uuid": str(uuid.uuid4()),

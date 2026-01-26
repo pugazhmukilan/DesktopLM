@@ -89,22 +89,41 @@ class SQLMemoryStore():
         if self.engine:
             self.engine.dispose()
 
-    def insert(self, data: MemoryModel):
+    def insert(self, data: dict):
         if not self.Session:
             raise Exception("Database not initialized. Call initialize() first.")
 
         session = self.Session()
         try:
+            # Helper to clean date values
+            def clean_date(dt_val, default_val=None):
+                if isinstance(dt_val, datetime):
+                    return dt_val
+                if isinstance(dt_val, str) and dt_val.strip():
+                    # Check for garbage template strings
+                    if dt_val.startswith("$") or "{" in dt_val or "get_curr" in dt_val:
+                        return default_val
+                    try:
+                        return datetime.fromisoformat(dt_val)
+                    except ValueError:
+                        return default_val
+                return default_val
+
+            # Handle flexible keys and date cleaning
+            src_dt = clean_date(data.get("source_datetime", data.get("created_at")), default_val=datetime.now())
+            interp_dt = clean_date(data.get("interpreted_datetime", data.get("event_time")), default_val=None)
+            meaning = data.get("interpreted_meaning", data.get("text", ""))
+
             # 6. Create a Model Instance (Row)
             new_memory = MemoryModel(
-                memory_id=str(data["uuid"]), # Assuming Memory object has a uuid field
-                category=data["category"],
-                interpreted_meaning=data["text"], # Assuming 'text' maps to meaning
-                source_datetime=data["created_at"],
-                interpreted_datetime=data["event_time"], # If applicable
-                datetime_confidence=0.0, # Map these from your Memory object
-                confidence=data["confidence"],
-                importance=data["importance"]
+                memory_id=str(uuid.uuid4()), 
+                category=data.get("category"),
+                interpreted_meaning=meaning,
+                source_datetime=src_dt,
+                interpreted_datetime=interp_dt,
+                datetime_confidence=data.get("datetime_confidence", 0.0),
+                confidence=data.get("confidence", 0.0),
+                importance=data.get("importance", 0.0)
             )
 
             # 7. Add and Commit
@@ -159,36 +178,33 @@ class SQLMemoryStore():
             session.close()
 
 if __name__ == "__main__":
-    print("startinf the SQL database")
+    # print("startinf the SQL database")
 
 
-    fake_json_data = {
-        "uuid": str(uuid.uuid4()),
-        "category": "user_preference",
-        "text": "The user prefers dark mode in VS Code.",
-        "created_at": datetime.now(),
-        "event_time": datetime.now(),
-        "confidence": 0.95,
-        "importance": 0.8
-    }
+    # fake_json_data = {
+    #     "uuid": str(uuid.uuid4()),
+    #     "category": "user_preference",
+    #     "text": "The user prefers dark mode in VS Code.",
+    #     "created_at": datetime.now(),
+    #     "event_time": datetime.now(),
+    #     "confidence": 0.95,
+    #     "importance": 0.8
+    # }
 
 
     database = SQLMemoryStore()
     database.initilize()
 
 
-    database.insert(fake_json_data)
-    database.showdata()
-
-
-    database.deletebyId("03c2e547-01b0-42b2-88be-0cc69026bf96")
+    # database.insert(fake_json_data)
     database.showdata()
 
 
 
-    print("DELETING ALL THE DATA FROM THE USER")
-    database.deleteAllData()
-    database.showdata()
+
+    # print("DELETING ALL THE DATA FROM THE USER")
+    # database.deleteAllData()
+    # database.showdata()
 
     
 

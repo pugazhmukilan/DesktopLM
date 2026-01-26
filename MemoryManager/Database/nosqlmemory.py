@@ -12,9 +12,10 @@ class NoSQLMemoryStore():
         self.db = self.client[db_name]
         self._initialized = True
 
-    def initialize(self):
+    def initilize(self):
         # MongoDB creates DB/collections lazily
         self.db.memories.create_index("memory_id", unique=True)
+        print("NOSQL DATABASE INITLIZED SUCCESSFULLY")
         
 
     def shutdown(self):
@@ -42,7 +43,7 @@ class NoSQLMemoryStore():
 
 if __name__ == "__main__":
     database = NoSQLMemoryStore()
-    database.initialize()
+    database.initilize()
 
     database.insert({"name" :"pugazh mukilan","number":3})
 
