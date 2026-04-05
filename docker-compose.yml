@@ -1,0 +1,12 @@
+# Optional: MongoDB for preference/fact memories. SQLite + Chroma are local files under DESKTOPLM_DATA_DIR.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - desktoplm_mongo_data:/data/db
+
+volumes:
+  desktoplm_mongo_data:

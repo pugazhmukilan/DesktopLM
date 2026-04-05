@@ -1,27 +1,40 @@
 import datetime
+import logging
 import os
 import pickle
 import uuid
 import chromadb
 
-class VectorMemoryStore():
-    def __init__(self, index_path="data/vectordb",collectionname = "data"):
+from MemoryManager.settings import chroma_persist_path
+
+logger = logging.getLogger(__name__)
+
+class VectorMemoryStore:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self, index_path=None, collectionname="data"):
         if hasattr(self, "_initialized"):
             return
 
-        self.index_path = index_path
+        self.index_path = index_path if index_path is not None else chroma_persist_path()
         self.index = {}
         self.client = None
         self.collection_name = collectionname
-        self.collection= None
+        self.collection = None
         self._initialized = True
 
-    def initilize(self):
-        
+    def initialize(self):
+        if self.client is not None:
+            return
 
-        self.client = chromadb.PersistentClient(path = self.index_path)
-        self.collection = self.client.get_or_create_collection(name = self.collection_name)
-        print("VECTOR DB INITILIZED")
+        self.client = chromadb.PersistentClient(path=self.index_path)
+        self.collection = self.client.get_or_create_collection(name=self.collection_name)
+        logger.info("Chroma vector store ready (%s)", self.index_path)
 
 
     def shutdown(self):
@@ -37,8 +50,7 @@ class VectorMemoryStore():
 
         # Use 'interpreted_meaning' as text if 'text' is missing
         text_content = data.get("interpreted_meaning", data.get("text", ""))
-        print("the text which is stored in the vectorDB")
-        print(text_content)
+        logger.debug("Chroma document: %s", (text_content or "")[:300])
 
         metad = data.copy()
         metad.pop("text",None)
@@ -51,10 +63,12 @@ class VectorMemoryStore():
             metad[key] = str(value)
 
 
+        mid = str(data["memory_id"])
+        doc = str(text_content) if text_content is not None else ""
         self.collection.add(
-            ids = data["memory_id"],
-            documents = text_content,
-            metadatas = metad
+            ids=[mid],
+            documents=[doc],
+            metadatas=[metad],
         )
 
     def showdata(self):
@@ -73,12 +87,46 @@ class VectorMemoryStore():
             print(f"Embedding Length: {len(all_data['embeddings'][i])}") 
             print("-" * 20)
 
+    def semantic_search(self, query: str, limit: int = 10) -> list[dict]:
+        """Chroma semantic search over episodic / vector-backed memories."""
+        if not self.collection:
+            raise RuntimeError("Vector store not initialized. Call initialize() first.")
+
+        n = max(1, min(limit, 50))
+        raw = self.collection.query(
+            query_texts=[query],
+            n_results=n,
+            include=["documents", "metadatas", "distances"],
+        )
+        ids_batch = raw.get("ids") or []
+        docs_batch = raw.get("documents") or []
+        meta_batch = raw.get("metadatas") or []
+        dist_batch = raw.get("distances") or []
+
+        ids = ids_batch[0] if ids_batch and isinstance(ids_batch[0], list) else ids_batch
+        docs = docs_batch[0] if docs_batch and isinstance(docs_batch[0], list) else docs_batch
+        metas = meta_batch[0] if meta_batch and isinstance(meta_batch[0], list) else meta_batch
+        dists = dist_batch[0] if dist_batch and isinstance(dist_batch[0], list) else dist_batch
+
+        out: list[dict] = []
+        for i, mid in enumerate(ids or []):
+            out.append(
+                {
+                    "source": "vector",
+                    "memory_id": mid,
+                    "text": docs[i] if i < len(docs) else "",
+                    "metadata": metas[i] if i < len(metas) else {},
+                    "distance": dists[i] if dists is not None and i < len(dists) else None,
+                }
+            )
+        return out
+
     
 if __name__ == "__main__":
     print("starting the vectorDB")
 
     database = VectorMemoryStore()
-    database.initilize()
+    database.initialize()
 
     fake_json_data = {
         "uuid": str(uuid.uuid4()),

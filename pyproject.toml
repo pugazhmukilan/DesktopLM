@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "desktoplm"
+version = "0.2.0"
+description = "Local-first AI assistant with multi-store memory, tool-calling agent, and hot-swappable LLM providers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "DesktopLM contributors" }]
+keywords = ["ollama", "langgraph", "memory", "local-llm", "chromadb", "gemini", "openai"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+  # LangChain / LangGraph agent
+  "langgraph>=0.2.0",
+  "langchain>=0.3.0",
+  "langchain-core",
+  "langchain-ollama",
+
+  # Cloud LLM providers
+  "langchain-google-genai",
+  "langchain-openai",
+
+  # App
+  "python-dotenv",
+  "ollama",
+  "google-generativeai",
+
+  # Stores
+  "sqlalchemy",
+  "pymongo",
+  "chromadb",
+  "ddgs",
+  "beautifulsoup4",
+  "requests"
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+desktoplm = "agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agent*", "MemoryManager*", "LLMS*", "tools*"]

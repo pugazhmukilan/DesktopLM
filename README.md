@@ -1,71 +1,138 @@
-"# 🤖 DesktopLM
+# DesktopLM
 
-<p align="center">
-  <strong>An experimental, local-first agentic AI system designed to move beyond simple chat-based interactions.</strong>
-</p>
+Local-first personal assistant with **hot-swappable LLM providers** (Ollama ↔ Gemini ↔ OpenAI), **LangGraph** for tool use, and **three memory backends** (SQLite, MongoDB, Chroma).
 
-<p align="center">
-  Instead of treating every input as a conversation, DesktopLM focuses on understanding intent, managing memory selectively, and invoking tools only when necessary. This project aims to explore how LLMs can operate as reliable desktop agents rather than passive responders.
-</p>
+## Quick Start
 
-<p align="center">
-  <img src="https://img.shields.io/badge/status-in--development-orange" alt="Project Status: In Development">
-</p>
+```bash
+git clone https://github.com/your-username/DesktopLM.git
+cd DesktopLM
+python -m venv .venv
 
----
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
 
-## 🧠 What is DesktopLM?
+pip install -e .
+desktoplm repl
+```
 
-DesktopLM is a lightweight orchestration layer built around a local language model (via Ollama). It decides *how* a user request should be handled, rather than blindly sending everything to the LLM.
+## What you need
 
-Depending on the input, the system can:
+1. **Python 3.10+**
+2. **[Ollama](https://ollama.com)** running with at least one model pulled (e.g. `ollama pull qwen2.5:7b`)
+3. **MongoDB** for preference/fact memories — easiest: `docker compose up -d` from this folder
 
--   **Respond directly** using the language model.
--   **Execute deterministic tools** (e.g., calculations, file-related tasks).
--   **Store information** as structured long-term memory.
--   **Ignore or discard** information that does not need persistence.
+SQLite and Chroma files live in `MemoryManager/Database/data/` automatically; no extra server needed.
 
-## ⚙️ How It Works (High Level)
+## Configure
 
-1.  **User Input**
-    > The system receives raw input from the user.
+Edit the `.env` file in the project root:
 
-2.  **Intent Understanding**
-    > The input is analyzed to determine whether it is a simple query, a task, or something worth remembering.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DESKTOPLM_LLM_MODE` | `local` | `local` (Ollama), `cloud`, or `auto` (ask at startup) |
+| `DESKTOPLM_MODEL` | `qwen2.5:7b` | Ollama model tag |
+| `DESKTOPLM_CLOUD_PROVIDER` | `gemini` | Cloud provider: `gemini` or `openai` |
+| `DESKTOPLM_CLOUD_MODEL` | `gemini-2.0-flash` | Cloud model name |
+| `GOOGLE_API_KEY` | — | Required for Gemini cloud mode |
+| `OPENAI_API_KEY` | — | Required for OpenAI cloud mode |
+| `DESKTOPLM_MONGO_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection |
+| `DESKTOPLM_MONGO_DB` | `memory_db` | MongoDB database name |
 
-3.  **Decision Layer**
-    > DesktopLM routes the request to the LLM for reasoning, a specific tool for execution, the memory module for storage, or a combination of these.
+## Start Mongo with Docker (optional)
 
-4.  **Memory Handling**
-    > Memories are stored selectively with metadata such as category, confidence, importance, and time relevance.
+```bash
+docker compose up -d
+```
 
-5.  **Response Generation**
-    > The final output is returned after all necessary steps are completed.
+## Commands
 
-## ✨ Why DesktopLM is Useful
+```bash
+desktoplm                    # show usage
+desktoplm repl               # interactive chat (recommended)
+desktoplm doctor             # verify environment (Ollama, MongoDB, keys, MCP)
+desktoplm select-model       # interactive model picker
+desktoplm demo-memory        # memory-extract + DB routing demo
+desktoplm chat "message"     # single message, then exit
+desktoplm "message"          # same as chat (shorthand)
+```
 
-Most AI systems treat every message the same. **DesktopLM does not.**
+### REPL Commands
 
--   Avoids unnecessary tool usage for simple queries.
--   Prevents unsafe or careless execution of high-risk actions.
--   Stores only meaningful information instead of everything.
--   Enables long-running, stateful AI behavior.
--   Works locally, improving privacy and control.
+While inside `desktoplm repl`:
 
-## 🚀 Advantages for Users
+| Command | Description |
+|---------|-------------|
+| `:switch` | Change LLM model at runtime (local ↔ cloud) |
+| `:model` | Show current model info |
+| `:tools` | List all loaded tools (built-in + MCP) |
+| `:trust <name>` | Trust a tool for this session (skip approval prompts) |
+| `:help` | Show commands |
+| `:quit` | Exit |
 
--   **Predictable Behavior:** Clear separation between reasoning, memory, and tools leads to more reliable actions.
--   **Local-First:** No forced cloud dependency, ensuring privacy and user control.
--   **Better Memory Control:** You decide what is stored versus what is ignored.
--   **Extensible Design:** Built for future agents and complex workflows.
+### CLI Flags
 
-## 🚧 Project Status
+| Flag | Description |
+|------|-------------|
+| `-q`, `--quiet` | Quieter console (errors only) |
+| `--yes`, `-y` | Auto-approve all tool actions (skip permission prompts) |
 
-This project is in an **early development stage**. The current focus is on:
+## Tool Permission System
 
--   Clean execution flow
--   Memory decision logic
--   Tool orchestration basics
--   Reliable local LLM integration
+Tools that modify files, execute commands, or call external services require **user approval** before execution:
 
-Features and architecture will evolve as the system matures." 
+```
+  ⚡ write_workspace_file filename='notes.txt'
+  ⚠  Tool 'write_workspace_file' wants to execute:
+     Args: filename='notes.txt', content='...'
+     Proceed? [Y/n/trust] y
+  ✓ (42ms) {"ok": true, "path": "..."}
+```
+
+- **Safe tools** (memory retrieval, get time, file reads) run silently
+- **Unsafe tools** (file writes, MCP commands) prompt `[Y/n/trust]`
+- Type `trust` to whitelist a tool for the current session
+- Use `--yes` flag to auto-approve everything
+
+## Adding MCP Tools
+
+Edit `tools/mcp_config.json` to declare external MCP tool servers:
+
+```json
+{
+  "mcpServers": {
+    "my-tool": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/tool", "run", "main.py"]
+    }
+  }
+}
+```
+
+Tools defined here are automatically loaded and available to the LLM. No Python changes needed.
+
+## Data Layout
+
+| Path | Purpose |
+|------|---------|
+| `MemoryManager/Database/data/sql/memory.db` | SQLite (todos, reminders, constraints) |
+| `MemoryManager/Database/data/vectordb/` | Chroma (episodic / semantic) |
+| `MemoryManager/Database/data/agent_workspace/` | Sandbox for agent file tools |
+| `MemoryManager/Database/data/logs/desktoplm.log` | Rotating trace log |
+
+MongoDB stores documents in the database name from `DESKTOPLM_MONGO_DB`.
+
+## Development
+
+- Adding tools: [docs/tools.md](docs/tools.md)
+- `pip install -r requirements.txt` also works
+
+## Uninstall
+
+```bash
+pip uninstall desktoplm
+```
+
+Your data is **not** removed automatically; delete the data directory if you want a clean wipe.

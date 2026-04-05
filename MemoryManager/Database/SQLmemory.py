@@ -1,10 +1,13 @@
+import logging
 import os
-from sqlalchemy import create_engine, Column, String, Float, DateTime
+from sqlalchemy import create_engine, Column, String, Float, DateTime, or_
 from sqlalchemy.orm import sessionmaker, declarative_base
-# from MemoryManager.memory import Memory
-# from MemoryManager.base_store import BaseStore
 import uuid
 from datetime import datetime
+
+from MemoryManager.settings import sqlite_db_path
+
+logger = logging.getLogger(__name__)
 
 # 1. Define the Base class for ORM models
 Base = declarative_base()
@@ -61,29 +64,28 @@ class SQLMemoryStore():
             cls._instance = super(SQLMemoryStore, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, db_path="data/sql/memory.db"):
+    def __init__(self, db_path=None):
         if hasattr(self, "_initialized") and self._initialized:
             return
-        
-        self.db_path = db_path
+
+        self.db_path = db_path if db_path is not None else sqlite_db_path()
         self.engine = None
         self.Session = None
         self._initialized = True
 
-    def initilize(self):
-   
+    def initialize(self):
+        if self.engine is not None:
+            return
+
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
-       
         connection_string = f"sqlite:///{self.db_path}"
         self.engine = create_engine(connection_string)
 
-       
         Base.metadata.create_all(self.engine)
 
-       
         self.Session = sessionmaker(bind=self.engine)
-        print("DATABASE INITILIZED SUCCESSFULLY")
+        logger.info("SQLite memory store ready (%s)", self.db_path)
 
     def shutdown(self):
         if self.engine:
@@ -131,7 +133,7 @@ class SQLMemoryStore():
             session.commit()
         except Exception as e:
             session.rollback()
-            print(f"Error inserting memory: {e}")
+            logger.exception("Error inserting memory: %s", e)
             raise e
         finally:
             session.close()
@@ -177,6 +179,55 @@ class SQLMemoryStore():
         finally:
             session.close()
 
+    def search_memories(
+        self,
+        query: str,
+        *,
+        categories: list[str] | None = None,
+        limit: int = 10,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+    ) -> list[dict]:
+        """Return recent or text-matched rows for agent retrieval (structured / schedule memories)."""
+        if not self.Session:
+            raise RuntimeError("Database not initialized. Call initialize() first.")
+
+        session = self.Session()
+        try:
+            q = session.query(MemoryModel)
+            if categories:
+                q = q.filter(MemoryModel.category.in_(categories))
+            
+            # Temporal filtering based on parsed dates
+            if start_date:
+                q = q.filter(or_(
+                    MemoryModel.interpreted_datetime >= start_date,
+                    MemoryModel.source_datetime >= start_date
+                ))
+            if end_date:
+                q = q.filter(or_(
+                    MemoryModel.interpreted_datetime < end_date,
+                    MemoryModel.source_datetime < end_date
+                ))
+
+            qstrip = (query or "").strip()
+            if qstrip:
+                pat = f"%{qstrip}%"
+                q = q.filter(
+                    or_(
+                        MemoryModel.interpreted_meaning.like(pat),
+                        MemoryModel.category.like(pat),
+                    )
+                )
+            rows = (
+                q.order_by(MemoryModel.source_datetime.desc())
+                .limit(max(1, min(limit, 100)))
+                .all()
+            )
+            return [{"source": "sql", **r.to_dict()} for r in rows]
+        finally:
+            session.close()
+
 if __name__ == "__main__":
     # print("startinf the SQL database")
 
@@ -193,7 +244,7 @@ if __name__ == "__main__":
 
 
     database = SQLMemoryStore()
-    database.initilize()
+    database.initialize()
 
 
     # database.insert(fake_json_data)

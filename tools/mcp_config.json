@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "documentation": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:/Users/PUGAZH/Desktop/Projects/mcp_project/documentation",
+        "run",
+        "main.py"
+      ]
+    },
+    "file-resource": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:/Users/PUGAZH/Desktop/Projects/mcp_project/resource-mcp",
+        "run",
+        "main.py"
+      ]
+    }
+  },
+  "preferences": {
+    "coworkScheduledTasksEnabled": false,
+    "sidebarMode": "chat",
+    "coworkWebSearchEnabled": true,
+    "ccdScheduledTasksEnabled": false
+  }
+}

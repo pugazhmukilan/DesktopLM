@@ -1,21 +1,38 @@
 # from base_store import BaseStore
+import logging
+import re
 import uuid
 from pymongo import MongoClient
 
+from MemoryManager.settings import mongo_db_name, mongo_uri
 
-class NoSQLMemoryStore():
-    def __init__(self, uri="mongodb://localhost:27017", db_name="memory_db"):
+logger = logging.getLogger(__name__)
+
+
+class NoSQLMemoryStore:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self, uri=None, db_name=None):
         if hasattr(self, "_initialized"):
             return
 
+        uri = uri if uri is not None else mongo_uri()
+        db_name = db_name if db_name is not None else mongo_db_name()
         self.client = MongoClient(uri)
         self.db = self.client[db_name]
         self._initialized = True
 
-    def initilize(self):
-        # MongoDB creates DB/collections lazily
+    def initialize(self):
+        if getattr(self, "_mongo_init_done", False):
+            return
         self.db.memories.create_index("memory_id", unique=True)
-        print("NOSQL DATABASE INITLIZED SUCCESSFULLY")
+        self._mongo_init_done = True
+        logger.info("MongoDB memory store ready (db=%s)", self.db.name)
         
 
     def shutdown(self):
@@ -27,7 +44,7 @@ class NoSQLMemoryStore():
             data["memory_id"] = str(uuid.uuid4())
 
         self.db.memories.insert_one(data)
-        print("inserted ",data," in mongodb successfully")
+        logger.debug("MongoDB insert memory_id=%s", data.get("memory_id"))
 
     def showdata(self):
         result = self.db.memories.find()
@@ -41,9 +58,47 @@ class NoSQLMemoryStore():
     def deleteAllData(self):
         self.db.memories.delete_many({})
 
+    def search_memories(
+        self,
+        query: str,
+        *,
+        categories: list[str] | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Text search over stored memory documents (preferences, facts, etc.)."""
+        lim = max(1, min(limit, 100))
+        qstrip = (query or "").strip()
+        filters = []
+
+        if categories:
+            filters.append({"category": {"$in": categories}})
+
+        if qstrip:
+            esc = re.escape(qstrip)
+            filters.append(
+                {
+                    "$or": [
+                        {"interpreted_meaning": {"$regex": esc, "$options": "i"}},
+                        {"text": {"$regex": esc, "$options": "i"}},
+                        {"category": {"$regex": esc, "$options": "i"}},
+                    ]
+                }
+            )
+
+        mongo_filter = {"$and": filters} if len(filters) > 1 else (filters[0] if filters else {})
+
+        cursor = self.db.memories.find(mongo_filter).limit(lim)
+        out: list[dict] = []
+        for doc in cursor:
+            d = dict(doc)
+            d.pop("_id", None)
+            d["source"] = "mongo"
+            out.append(d)
+        return out
+
 if __name__ == "__main__":
     database = NoSQLMemoryStore()
-    database.initilize()
+    database.initialize()
 
     database.insert({"name" :"pugazh mukilan","number":3})
 
