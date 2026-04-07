@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import pyfiglet
 
 from agent.run_logging import configure_logging
 
@@ -19,12 +20,58 @@ _DEFAULT_CHAT = (
     "Summarize what you know about my schedule and preferences using memory tools if needed."
 )
 
-_BANNER = f"""
-{_BOLD}+===================================================+
-|              DesktopLM  v0.2.0                    |
-|      Local-first AI assistant with memory         |
-+==================================================={_RESET}
-"""
+def create_banner():
+    """Creates a visually appealing, color-gradient banner using pyfiglet."""
+    try:
+        font = "cybermedium"
+        title_text = "DesktopLM"
+        title = pyfiglet.figlet_format(title_text, font=font)
+    except pyfiglet.FontNotFound:
+        # Fallback font if cybermedium is not available
+        font = "slant"
+        title = pyfiglet.figlet_format(title_text, font=font)
+
+    version = "v0.2.0"
+    tagline = "Local-first AI assistant with memory"
+
+    # Define the gradient colors (start_rgb, end_rgb)
+    start_rgb = (0, 100, 255)  # Deep Blue
+    end_rgb = (0, 255, 255)    # Cyan
+
+    title_lines = title.split('\n')
+    num_lines = len(title_lines)
+    
+    gradient_title = []
+    for i, line in enumerate(title_lines):
+        # Calculate the interpolation factor
+        t = i / (num_lines - 1) if num_lines > 1 else 0
+        
+        # Interpolate RGB values
+        r = int(start_rgb[0] * (1 - t) + end_rgb[0] * t)
+        g = int(start_rgb[1] * (1 - t) + end_rgb[1] * t)
+        b = int(start_rgb[2] * (1 - t) + end_rgb[2] * t)
+        
+        # Create the 24-bit ANSI color code
+        color_code = f"\033[38;2;{r};{g};{b}m"
+        gradient_title.append(f"{color_code}{_BOLD}{line}{_RESET}")
+
+    # Get the width of the longest line in the ASCII art for alignment
+    max_line_width = max(len(line) for line in title.split('\n')) if title else 0
+
+    colored_version = f"{_YELLOW}{version}{_RESET}"
+    colored_tagline = f"{_GREEN}{tagline}{_RESET}"
+    
+    banner = "\n" + "\n".join(gradient_title) + "\n"
+    banner += f"{' ' * (max_line_width - len(version))}{colored_version}\n"
+    banner += f"{' ' * ((max_line_width - len(tagline)) // 2)}{colored_tagline}\n"
+    
+    # Dynamic separator based on title width
+    separator = f"+{'=' * (max_line_width - 2)}+"
+    banner += f"{_DIM}{separator}{_RESET}\n"
+    
+    return banner
+
+_BANNER = create_banner()
 
 
 def _usage_text() -> str:

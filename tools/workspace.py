@@ -18,19 +18,68 @@ def get_agent_workspace() -> Path:
 AGENT_WORKSPACE = agent_workspace_path()
 
 
-def resolve_workspace_file(filename: str) -> Path:
+def resolve_path(path: str) -> Path:
     """
-    Map a simple filename to a path under the per-user agent workspace.
-    Rejects path components and traversal.
+    Resolves a string to a Path object.
+    Allows absolute paths.
     """
-    root = agent_workspace_path()
-    name = Path(filename).name
-    if not name or name != filename.strip():
-        raise ValueError("Use a plain file name (no paths).")
-    if not _SAFE_NAME.match(name):
-        raise ValueError("Invalid file name; use letters, numbers, ._- and spaces only.")
-    path = (root / name).resolve()
-    root_resolved = root.resolve()
-    if root_resolved != path and root_resolved not in path.parents:
-        raise ValueError("Path must stay inside the agent workspace.")
-    return path
+    return Path(path).resolve()
+
+
+def search_files(search_path: str, query: str) -> str:
+    """
+    Searches for files or directories matching a query within a given path.
+    If the initial search yields no results, it will try other common locations.
+
+    This function expands common user-friendly paths (e.g., 'Desktop', 'Documents')
+    and performs a case-insensitive search.
+
+    Args:
+        search_path: The directory to start the search from (e.g., 'Desktop').
+        query: The name or partial name of the file or folder to find.
+
+    Returns:
+        A JSON string containing a list of found paths or an error message.
+    """
+    import json
+
+    try:
+        # Expand user-friendly paths like '~'
+        base_path = Path(search_path).expanduser()
+
+        # List of special folders to search
+        special_folders = {
+            "desktop": Path.home() / "Desktop",
+            "documents": Path.home() / "Documents",
+            "downloads": Path.home() / "Downloads",
+        }
+        
+        search_locations = []
+        if search_path.lower() in special_folders:
+            # Prioritize the requested folder, then add the others
+            search_locations.append(special_folders[search_path.lower()])
+            for name, path in special_folders.items():
+                if name != search_path.lower():
+                    search_locations.append(path)
+        elif base_path.is_dir():
+            search_locations.append(base_path)
+        else:
+            # If the path is not a special folder and not a directory, search all special folders
+            search_locations.extend(special_folders.values())
+
+        found_items = []
+        query_lower = query.lower()
+        for location in search_locations:
+            if location.is_dir():
+                for item in location.rglob('*'):
+                    if query_lower in item.name.lower():
+                        found_items.append(str(item))
+            if found_items:
+                break # Stop searching if we found something
+
+        if not found_items:
+            return json.dumps({"ok": True, "message": "No files or folders found matching the query in Desktop, Documents, or Downloads."})
+
+        return json.dumps({"ok": True, "results": found_items})
+    except Exception as e:
+        return json.dumps({"ok": False, "error": str(e)})

@@ -14,8 +14,9 @@ from typing import Any, Callable
 SAFE_TOOLS: set[str] = {
     "retrieve_user_memory",
     "get_current_time",
-    "read_workspace_file",
+    "read_file",
     "search_and_read_web",
+    "search_files",
 }
 
 # Session-level whitelist (user can :trust a tool)

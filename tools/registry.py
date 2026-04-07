@@ -15,7 +15,7 @@ from langchain_core.tools import tool
 
 from agent.permissions import is_safe, request_approval
 from MemoryManager.Orchesterator import MemoryOrchestrator
-from tools.workspace import resolve_workspace_file
+from tools.workspace import resolve_path, search_files as search_files_logic
 from tools.mcp_loader import load_mcp_tools
 from tools.web_search import search_and_read_web
 from tools.shell_executor import run_cli_command
@@ -64,23 +64,35 @@ def build_tools(orchestrator: MemoryOrchestrator | None = None):
         return json.dumps({"ok": True, "path": str(path)})
 
     @tool
-    def read_workspace_file(
-        filename: Annotated[str, "File name only"],
+    def read_file(
+        path: Annotated[str, "Absolute or relative path to the file"],
     ) -> str:
-        """Read a text file from the agent workspace sandbox."""
-        path = resolve_workspace_file(filename)
-        if not path.is_file():
-            return json.dumps({"ok": False, "error": "file_not_found", "path": str(path)})
-        return path.read_text(encoding="utf-8")
+        """Read a text file from the local filesystem."""
+        resolved_path = resolve_path(path)
+        if not resolved_path.is_file():
+            return json.dumps({"ok": False, "error": "file_not_found", "path": str(resolved_path)})
+        return resolved_path.read_text(encoding="utf-8")
+
+    @tool
+    def search_files(
+        search_path: Annotated[str, "Directory to start the search from (e.g., 'Desktop', 'Documents', or a full path)."],
+        query: Annotated[str, "The name or partial name of the file or folder to find."],
+    ) -> str:
+        """
+        Searches for files or directories matching a query within a given path.
+        This tool can search user's Desktop, Documents, Downloads, or any other directory.
+        """
+        return search_files_logic(search_path, query)
 
     # Built-in tools
     all_tools = [
         retrieve_user_memory,
         get_current_time,
         write_workspace_file,
-        read_workspace_file,
+        read_file,
         search_and_read_web,
         run_cli_command,
+        search_files,
     ]
 
     # Load MCP tools from JSON config and wrap as LangChain @tool functions
