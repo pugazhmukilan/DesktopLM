@@ -13,6 +13,9 @@ from agent.permissions import trust_tool, set_auto_approve
 from LLMS.provider import LLMProvider
 from LLMS.model_selector import select_model_interactive
 from MemoryManager.Orchesterator import MemoryOrchestrator
+from LLMS.provider import get_llm_provider
+from tools.registry import build_tools
+from tools.workspace import resolve_path
 
 logger = logging.getLogger("desktoplm.pipeline")
 

@@ -53,12 +53,11 @@ def build_tools(orchestrator: MemoryOrchestrator | None = None):
 
     @tool
     def write_workspace_file(
-        filename: Annotated[str, "File name only, e.g. notes.txt"],
-        content: Annotated[str, "Full text to write"],
+        filename: Annotated[str, "File name (e.g. 'notes.txt', 'draft.py'). Subdirectories are OK."],
+        content: Annotated[str, "Full text content to write."],
     ) -> str:
-        """Create or overwrite a file in the agent workspace sandbox."""
-        # Permission check is handled by the callback in trace_callbacks.py
-        path = resolve_workspace_file(filename)
+        """Create or overwrite a file in the agent's sandboxed workspace."""
+        path = resolve_path(filename)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return json.dumps({"ok": True, "path": str(path)})

@@ -28,7 +28,8 @@ def resolve_path(path: str) -> Path:
 
 def search_files(search_path: str, query: str) -> str:
     """
-    Searches for files or directories matching a query within a given path.
+    Searches for files or directories matching a query within a given path,
+    or lists all contents if the query is a wildcard ('*') or empty.
     If the initial search yields no results, it will try other common locations.
 
     This function expands common user-friendly paths (e.g., 'Desktop', 'Documents')
@@ -36,7 +37,7 @@ def search_files(search_path: str, query: str) -> str:
 
     Args:
         search_path: The directory to start the search from (e.g., 'Desktop').
-        query: The name or partial name of the file or folder to find.
+        query: The name or partial name of the file/folder, or '*' to list all.
 
     Returns:
         A JSON string containing a list of found paths or an error message.
@@ -68,14 +69,20 @@ def search_files(search_path: str, query: str) -> str:
             search_locations.extend(special_folders.values())
 
         found_items = []
+        list_all_mode = query == '*' or not query.strip()
         query_lower = query.lower()
+
         for location in search_locations:
             if location.is_dir():
                 for item in location.rglob('*'):
-                    if query_lower in item.name.lower():
+                    if list_all_mode:
                         found_items.append(str(item))
-            if found_items:
-                break # Stop searching if we found something
+                    elif query_lower in item.name.lower():
+                        found_items.append(str(item))
+            
+            # If we found items in the primary search location, don't check the others
+            if found_items and location == search_locations[0]:
+                break
 
         if not found_items:
             return json.dumps({"ok": True, "message": "No files or folders found matching the query in Desktop, Documents, or Downloads."})

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from typing import Any
 
 import dotenv
@@ -22,6 +23,19 @@ logger = logging.getLogger("desktoplm.provider")
 # ---------------------------------------------------------------------------
 # Provider factory
 # ---------------------------------------------------------------------------
+
+_llm_provider_instance: LLMProvider | None = None
+_llm_provider_lock = threading.Lock()
+
+
+def get_llm_provider() -> "LLMProvider":
+    """Return the singleton LLMProvider instance."""
+    global _llm_provider_instance
+    with _llm_provider_lock:
+        if _llm_provider_instance is None:
+            _llm_provider_instance = LLMProvider()
+        return _llm_provider_instance
+
 
 def _build_ollama(model: str, base_url: str | None = None):
     """Create a ChatOllama instance."""
@@ -71,15 +85,8 @@ class LLMProvider:
     all reference the same provider instance.
     """
 
-    _instance: LLMProvider | None = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
     def __init__(self):
-        if hasattr(self, "_initialized"):
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
         self._mode: str = "local"           # "local" | "cloud"
@@ -148,13 +155,18 @@ class LLMProvider:
             provider = os.getenv("DESKTOPLM_CLOUD_PROVIDER", "gemini").strip().lower()
             model = os.getenv("DESKTOPLM_CLOUD_MODEL", "gemini-2.0-flash").strip()
             if provider == "gemini":
-                key = os.getenv("GOOGLE_API_KEY", "")
+                api_key = os.getenv("GOOGLE_API_KEY")
+                if not api_key:
+                    raise ValueError("GOOGLE_API_KEY not set for cloud mode")
+                self.switch_to_cloud(provider, model, api_key)
+            elif provider in ("openai", "groq", "together"):
+                api_key = os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    raise ValueError(f"{provider.upper()}_API_KEY not set for cloud mode")
+                base_url = os.getenv("OPENAI_BASE_URL")
+                self.switch_to_cloud(provider, model, api_key, base_url)
             else:
-                key = os.getenv("OPENAI_API_KEY", "")
-            if not key:
-                logger.warning("Cloud mode but no API key found; falling back to local Ollama")
-                self.switch_to_local(self._model_name)
-                return
-            self.switch_to_cloud(provider, model, key)
-        else:
-            self.switch_to_local(self._model_name)
+                raise ValueError(f"Unknown cloud provider in env vars: {provider!r}")
+        else:  # local
+            model = os.getenv("DESKTOPLM_MODEL", "qwen2.5:7b")
+            self.switch_to_local(model)
